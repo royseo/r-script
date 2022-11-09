@@ -1,0 +1,639 @@
+---
+title: "SFN_2022"
+author: "Roy Seo"
+date: '2022-06-05'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library('corrplot')
+library('dplyr')
+library('forcats')
+library('ggbeeswarm')
+library('ggplot2')
+library('Hmisc')
+library('lme4')
+library('lmerTest')
+library('magrittr')
+library('plyr')
+library('Rmisc')
+library('tableone')
+library('tidyverse')
+library('knitr')
+
+```
+
+__grabbing the Variables of Interest
+
+```{r}
+redcap <- read.csv(file ='RepositorySubjectsPH-CP5192022_DATA_2022-05-19_1329 (1).csv')
+df_redcap <- select(redcap, 
+                    record_id, 
+                    patientlist_gender_v2_v2, 
+                    patientlist_ethnicgroup_v2_v2, 
+                    syndrome_v2_v2, 
+                    mocascore_9_v2_v2, 
+                    mocascore_v2_v2, 
+                    eti_v2_v2,
+                    l_temporal_ct, 
+                    r_temporal_ct, 
+                    l_frontal_ct,
+                    r_frontal_ct,
+                    l_occipital_ct,
+                    r_occipital_ct,
+                    l_parietal_ct,
+                    r_parietal_ct,
+                    y7n1_visual_ct,
+                    y7n2_somatomotor_ct,
+                    y7n3_dorsalattn_ct,
+                    y7n4_ventralattn_ct,
+                    y7n5_limbic_ct,
+                    y7n6_frontoparietal_ct,
+                    y7n7_defaultmode_ct)
+
+mbwc <- read.csv(file ='MBWC_database_SFN.csv')
+df_mbwc <- select(mbwc, 
+                  record_id, 
+                  Age, 
+                  Edu, 
+                  TOPF_raw,
+                  TOPF_Actual_SS, 
+                  TOPF_Pred_SS,
+                  WTAR_raw,
+                  WTAR_SS,
+                  eFSIQ, 
+                  FAS_total_raw, 
+                  FAS_total_T, 
+                  Animals_raw, 
+                  Animals_T, 
+                  BNT_totalwstim_raw, 
+                  BNT_totalwstim_T)
+
+
+```
+
+___merge
+
+```{r}
+
+# merge two data frames by ID
+total  <- merge(df_redcap, df_mbwc, by="record_id")
+
+sub_id <-c()
+for (i in length(total$record_id)) {
+  sub_id[i]<-ifelse(i<10, paste0("ID-0",i), paste0("ID-",i))}
+
+ gender <-total$patientlist_gender_v2_v2
+ ethnicity <-total$patientlist_ethnicgroup_v2_v2
+ diagonoses <- total$syndrome_v2_v2
+ moca_total <-total$mocascore_v2_v2 
+ moca_lang <-total$mocascore_9_v2_v2
+ etiology <- total$eti_v2_v2
+ l_temporal <-total$l_temporal_ct
+ r_temporal <-total$r_temporal_ct 
+ l_frontal <- total$l_frontal_ct
+ r_frontal <- total$r_frontal_ct
+ l_occipital <- total$l_occipital_ct
+ r_occipital <- total$r_occipital_ct
+ l_parietal <-total$l_parietal_ct
+ r_parietal <- total$r_parietal_ct
+ y1_visual <- total$y7n1_visual_ct
+ y2_somatomotor <- total$y7n2_somatomotor_ct
+ y3_dorsalattn <- total$y7n3_dorsalattn_ct
+ y4_ventralattn <-total$y7n4_ventralattn_ct
+ y5_limbic <- total$y7n5_limbic_ct
+ y6_frontoparietal <-total$y7n6_frontoparietal_ct
+ y7_defaultmode <-total$y7n7_defaultmode_ct
+ age <- total$Age
+ edu <- total$Edu 
+ topf_raw <-total$TOPF_raw
+ topf_actual_ss <- total$TOPF_Actual_SS
+ topf_pred_ss <- total$TOPF_Pred_SS
+ wtar_raw <- total$WTAR_raw
+ wtar_ss <- total$WTAR_SS
+ wtar_efsiq <-total$eFSIQ
+ fas_raw <-total$FAS_total_raw
+ fas_t<- total$FAS_total_T
+ animal_raw <- total$Animals_raw
+ animal_t <- total$Animals_T
+ bnt_raw <- total$BNT_totalwstim_raw
+ bnt_t <-total$BNT_totalwstim_T
+ 
+
+
+
+df <- data.frame(sub_id, 
+                 gender,
+                 age,
+                 ethnicity,
+                 edu, 
+                 diagonoses,
+                 etiology,
+                 moca_total,
+                 moca_lang, 
+                 topf_raw,
+                 topf_actual_ss,
+                 topf_pred_ss, 
+                 wtar_raw,
+                 wtar_ss,
+                 wtar_efsiq,
+                 fas_raw,
+                 fas_t,
+                 animal_raw,
+                 animal_t,
+                 bnt_raw,
+                 bnt_t,
+                 l_frontal,
+                 r_frontal, 
+                 l_temporal, 
+                 r_temporal, 
+                 l_parietal,
+                 r_parietal, 
+                 r_occipital,
+                 l_occipital,
+                 y1_visual,
+                 y2_somatomotor,
+                 y3_dorsalattn,
+                 y4_ventralattn,
+                 y5_limbic,
+                 y6_frontoparietal,
+                 y7_defaultmode)
+
+
+summary(total)
+HC <- total$syndrome_v2_v2 == '3'
+MCI <- total$syndrome_v2_v2 == '1'
+Dementia <- total$syndrome_v2_v2 == '2'
+summary(HC)
+
+```
+
+
+___factors
+
+```{r}
+
+sub_id <- as.factor(df$sub_id)
+diag <- factor(df$diagonoses, levels = c("1", "2", "3", "4"))
+eth <- factor(df$ethnicity, levels = c("Declined to Answer","Hispanic","Hispanic or Latino", "Not Hispanic or Latino","Not-Hispanic","Unavailable or Unknown"))
+eti <- factor(df$etiology, levels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10"))
+
+#syndrome_v2_v2
+##1-MCI
+##2-Dementia
+##3-Subjective Memory Complaint/Normal Cognition
+##4-Unknown-Defer to Record
+
+#eti_v2_v2
+##0-
+##1-Alzheimer's disease
+##2-Lewy Body
+##3-Parkinson's disease
+##4-FTLD
+##5-Vascular
+##6-Mixed pathology
+##7-Non-neurodegenerative
+##8-Unknown
+##9-Other
+##10-
+
+
+```
+
+```{r}
+
+#plot the outliers
+boxplot(total$TOPF_Actual_SS,
+  ylab = "topf_actual_SS",
+  main = "Boxplot of topf_actual_SS")
+
+boxplot(total$eFSIQ,
+  ylab = "WTAR_eFSIQ",
+  main = "Boxplot of WTAR_eFSIQ")
+
+topf_actual_ss_outrm <- total$TOPF_Actual_SS [!total$TOPF_Actual_SS %in% boxplot.stats(total$TOPF_Actual_SS)$out]
+boxplot(topf_actual_ss_outrm,
+  ylab = "topf_actual_SS",
+  main = "Boxplot of topf_actual_SS")
+
+wtar_efsiq_outrm <- wtar_efsiq[!wtar_efsiq %in% boxplot.stats(wtar_efsiq)$out]
+boxplot(wtar_efsiq_outrm,
+  ylab = "wtar_efsiq_outrm",
+  main = "Boxplot of wtar_efsiq_outrm")
+
+```
+
+```{r}
+#find the quantiles (25th, 50th, and 75th percentiles) of the vector
+quantile(df$topf_actual_ss, probs = c(.25, .5, .75), na.rm = TRUE)
+quantile(df$wtar_efsiq, probs = c(.25, .5, .75), na.rm = TRUE)
+
+```
+
+___topf_ss < = 25% - Dementia:AD
+
+```{r}
+topf_bottom_y1visual <- lm(y1_visual ~ topf_actual_ss, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$topf_actual_ss <= 95.25)) 
+summary(topf_bottom_y1visual)
+
+topf_bottom_y2somato <- lm(y2_somatomotor ~ topf_actual_ss, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$topf_actual_ss <= 95.25)) 
+summary(topf_bottom_y2somato)
+
+topf_bottom_y3dorsalattn <- lm(y3_dorsalattn ~ topf_actual_ss, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$topf_actual_ss <= 95.25)) 
+summary(topf_bottom_y3dorsalattn)
+
+topf_bottom_y4ventral  <- lm(y4_ventralattn ~ topf_actual_ss, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$topf_actual_ss <= 95.25)) 
+summary(topf_bottom_y4ventral )
+
+topf_bottom_y5limbic <- lm(y5_limbic ~ topf_actual_ss, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$topf_actual_ss <= 95.25)) 
+summary(topf_bottom_y5limbic)
+
+topf_bottom_y6frontoparietal <- lm(y6_frontoparietal ~ topf_actual_ss, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$topf_actual_ss <= 95.25)) 
+summary(topf_bottom_y6frontoparietal)
+
+topf_bottom_y7defaultmode <- lm(y7_defaultmode ~ topf_actual_ss, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$topf_actual_ss <= 95.25))
+summary(topf_bottom_y7defaultmode)
+```
+
+
+```{r}
+topf_top_y1visual <- lm(y1_visual ~ topf_actual_ss, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$topf_actual_ss >= 114.50)) 
+summary(topf_top_y1visual)
+
+topf_top_y2somato <- lm(y2_somatomotor ~ topf_actual_ss, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$topf_actual_ss >= 114.50))  
+summary(topf_top_y2somato )
+
+topf_top_y3dorsalattn <- lm(y3_dorsalattn ~ topf_actual_ss, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$topf_actual_ss >= 114.50)) 
+summary(topf_top_y3dorsalattn)
+
+topf_top_y4ventral <- lm(y4_ventralattn ~ topf_actual_ss, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$topf_actual_ss >= 114.50)) 
+summary(topf_top_y4ventral)
+
+topf_top_y5limbic <- lm(y5_limbic ~ topf_actual_ss, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$topf_actual_ss >= 114.50)) 
+summary(topf_top_y5limbic)
+
+topf_top_y6frontoparietal <- lm(y6_frontoparietal ~ topf_actual_ss, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$topf_actual_ss >= 114.50)) 
+summary(topf_top_y6frontoparietal)
+
+topf_top_y7defaultmode <- lm(y7_defaultmode ~ topf_actual_ss, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$topf_actual_ss >= 114.50)) 
+summary(topf_top_y7defaultmode)
+
+
+```
+
+```{r}
+
+wtar_bottom_y1visual <- lm(y1_visual ~ wtar_efsiq, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$wtar_efsiq <= 104.0)) 
+summary(wtar_bottom_y1visual)
+
+wtar_bottom_y2somato <- lm(y2_somatomotor ~ wtar_efsiq , data=subset(df,diagonoses == "2" & df$etiology == "1" & df$wtar_efsiq <= 104.0))
+summary(wtar_bottom_y2somato)
+
+wtar_bottom_y3dorsalattn <- lm(y3_dorsalattn ~ wtar_efsiq , data=subset(df,diagonoses == "2" & df$etiology == "1" & df$wtar_efsiq <= 104.0))
+summary(wtar_bottom_y3dorsalattn)
+
+wtar_bottom_y4ventral <- lm(y4_ventralattn ~ wtar_efsiq , data=subset(df,diagonoses == "2" & df$etiology == "1" & df$wtar_efsiq <= 104.0))
+summary(wtar_bottom_y4ventral)
+
+wtar_bottom_y5limbic <- lm(y5_limbic ~ wtar_efsiq , data=subset(df,diagonoses == "2" & df$etiology == "1" & df$wtar_efsiq <= 104.0))
+summary(wtar_bottom_y5limbic)
+
+wtar_bottom_y6frontoparietal <- lm(y6_frontoparietal ~ wtar_efsiq , data=subset(df,diagonoses == "2" & df$etiology == "1" & df$wtar_efsiq <= 104.0))
+summary(wtar_bottom_y6frontoparietal)
+
+wtar_bottom_y7defaultmode <- lm(y7_defaultmode ~ wtar_efsiq , data=subset(df,diagonoses == "2" & df$etiology == "1" & df$wtar_efsiq <= 104.0))
+summary(wtar_bottom_y7defaultmode)
+```
+
+```{r}
+wtar_top_y1visual <- lm(y1_visual ~ wtar_efsiq, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$wtar_efsiq >= 118.0)) 
+summary(wtar_top_y1visual)
+
+wtar_top_y2somato <- lm(y2_somatomotor ~ wtar_efsiq , data=subset(df,diagonoses == "2" & df$etiology == "1" & df$wtar_efsiq >= 118.0))
+summary(wtar_top_y2somato)
+
+wtar_top_y3dorsalattn <- lm(y3_dorsalattn ~ wtar_efsiq , data=subset(df,diagonoses == "2" & df$etiology == "1" & df$wtar_efsiq >= 118.0))
+summary(wtar_top_y3dorsalattn)
+
+wtar_top_y4ventral  <- lm(y4_ventralattn ~ wtar_efsiq , data=subset(df,diagonoses == "2" & df$etiology == "1" & df$wtar_efsiq >= 118.0))
+summary(wtar_top_y4ventral )
+
+wtar_top_y5limbic <- lm(y5_limbic ~ wtar_efsiq , data=subset(df,diagonoses == "2" & df$etiology == "1" & df$wtar_efsiq >= 118.0))
+summary(wtar_top_y5limbic)
+
+wtar_top_y6frontoparietal <- lm(y6_frontoparietal ~ wtar_efsiq , data=subset(df,diagonoses == "2" & df$etiology == "1" & df$wtar_efsiq >= 118.0))
+summary(wtar_top_y6frontoparietal)
+
+wtar_top_y7defaultmode <- lm(y7_defaultmode ~ wtar_efsiq , data=subset(df,diagonoses == "2" & df$etiology == "1" & df$wtar_efsiq >= 118.0))
+summary(wtar_top_y7defaultmode)
+```
+
+```{r}
+topf_bottom_y1visual <- lm(y1_visual ~ topf_actual_ss, data=subset(df, diagonoses == "1" & topf_actual_ss <= 95.25)) 
+summary(topf_bottom_y1visual)
+
+topf_bottom_y2somato <- lm(y2_somatomotor ~ topf_actual_ss, data=subset(df,diagonoses == "1" & topf_actual_ss <= 95.25)) 
+summary(topf_bottom_y2somato)
+
+topf_bottom_y3dorsalattn <- lm(y3_dorsalattn ~ topf_actual_ss, data=subset(df,diagonoses == "1" & topf_actual_ss <= 95.25)) 
+summary(topf_bottom_y3dorsalattn)
+
+topf_bottom_y4ventral  <- lm(y4_ventralattn ~ topf_actual_ss, data=subset(df,diagonoses == "1" & topf_actual_ss <= 95.25)) 
+summary(topf_bottom_y4ventral )
+
+topf_bottom_y5limbic <- lm(y5_limbic ~ topf_actual_ss, data=subset(df,diagonoses == "1" & topf_actual_ss <= 95.25)) 
+summary(topf_bottom_y5limbic)
+
+topf_bottom_y6frontoparietal <- lm(y6_frontoparietal ~ topf_actual_ss, data=subset(df,diagonoses == "1" & topf_actual_ss <= 95.25)) 
+summary(topf_bottom_y6frontoparietal)
+
+topf_bottom_y7defaultmode <- lm(y7_defaultmode ~ topf_actual_ss, data=subset(df,diagonoses == "1" & topf_actual_ss <= 95.25))
+summary(topf_bottom_y7defaultmode)
+```
+
+
+___plot
+```{r}
+
+graph0 =ggplot(total, aes(Age, FAS_total_raw))
+ graph0 +
+ geom_point(
+        shape = 21,
+        color = "#CBC3E3",
+        fill = "#4B2E83",
+        size = 4,
+        stroke =1)  +
+                xlim(0,100) +
+                ylim(0,100) +
+   theme(strip.background.x = element_rect(size = 0.5, linetype = "solid"),
+         axis.line = element_line(colour = "#85754D", size = 2))+
+   theme(
+         panel.grid.major = element_blank(),
+         panel.grid.minor = element_blank(),
+         panel.background = element_rect(fill = "#B7A57A",colour = NA),
+         plot.background = element_rect(fill = "transparent",colour = NA)) +
+
+             geom_smooth(method = 'lm', se =FALSE, color = "#4B2E83", size = 1.5)
+
+```
+
+---MCI: regression TOPF and LANG TESTS
+---MCI: regression WTAR and LANG TESTS
+
+```{r}
+topf_fas_raw <- lm(fas_raw ~ topf_actual_ss, data=subset(df, diagonoses == "1"))
+summary(topf_fas_raw)
+####
+
+topf_animal_raw <- lm(animal_raw~ topf_actual_ss, data=subset(df,diagonoses == "1"))
+summary(topf_animal_raw)
+
+topf_bnt <- lm(bnt_raw~ topf_actual_ss, data=subset(df,diagonoses == "1"))
+summary(topf_bnt)
+
+WTAR_fas_raw <- lm(fas_raw ~ wtar_efsiq, data=subset(df, diagonoses == "1"))
+summary(WTAR_fas_raw)
+####
+
+WTAR_animal_raw <- lm(animal_raw~ wtar_efsiq, data=subset(df,diagonoses == "1"))
+summary(WTAR_animal_raw)
+
+WTAR_bnt <- lm(bnt_raw~ wtar_efsiq, data=subset(df,diagonoses == "1"))
+summary(WTAR_bnt)
+####
+```
+___Dementia,AD: regression TOPF and LANG TESTS
+___Dementia,AD: regression WTAR and LANG TESTS
+
+```{r}
+topf_fas_raw_AD <- lm(fas_raw ~ topf_actual_ss, data=subset(df,diagonoses == "2" & df$etiology == "1"))
+summary(topf_fas_raw_AD)
+
+topf_animal_raw_AD <- lm(animal_raw~ topf_actual_ss, data=subset(df,diagonoses == "2" & df$etiology == "1"))
+summary(topf_animal_raw_AD)
+
+topf_bnt_AD <- lm(bnt_raw~ topf_actual_ss, data=subset(df,diagonoses == "2" & df$etiology == "1"))
+summary(topf_bnt_AD)
+
+WTAR_fas_raw_AD <- lm(fas_raw ~ wtar_efsiq, data=subset(df,diagonoses == "2" & df$etiology == "1"))
+summary(WTAR_fas_raw_AD)
+#######
+
+WTAR_animal_raw_AD <- lm(animal_raw~ wtar_efsiq, data=subset(df,diagonoses == "2" & df$etiology == "1"))
+summary(WTAR_animal_raw_AD)
+
+WTAR_bnt_AD <- lm(bnt_raw~ wtar_efsiq, data=subset(df,diagonoses == "2" & df$etiology == "1"))
+summary(WTAR_bnt_AD)
+
+```
+
+
+
+____Dementia, AD: top and bottom TOPF 
+
+```{r}
+###아무것도 없음
+####TOP
+topf_top_fas_raw_AD <- lm(fas_raw ~ topf_actual_ss, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$topf_actual_ss >= 114.50)) 
+summary(topf_top_fas_raw_AD)
+
+topf_top_animal_raw_AD <- lm(animal_raw ~ topf_actual_ss, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$topf_actual_ss >= 114.50))  
+summary(topf_top_animal_raw_AD)
+
+topf_top_bnt_raw_AD <- lm(bnt_raw ~ topf_actual_ss, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$topf_actual_ss >= 114.50)) 
+summary(topf_top_bnt_raw_AD)
+
+####BOTTOM
+topf_bottom_fas_raw_AD  <- lm(fas_raw  ~ topf_actual_ss, data=subset(df, diagonoses == "2" & df$etiology == "1" & topf_actual_ss <= 95.25)) 
+summary(topf_bottom_fas_raw_AD)
+
+topf_bottom_animal_raw_AD <- lm(animal_raw ~ topf_actual_ss, data=subset(df, diagonoses == "2" & df$etiology == "1" & topf_actual_ss <= 95.25)) 
+summary(topf_bottom_animal_raw_AD)
+
+topf_bottom_bnt_raw_AD <- lm(bnt_raw ~ topf_actual_ss, data=subset(df, diagonoses == "2" & df$etiology == "1" & topf_actual_ss <= 95.25)) 
+summary(topf_bottom_bnt_raw_AD)
+
+
+```
+
+___Dementia, AD: top and bottom WTAR 
+
+```{r}
+#########아무것도 없음
+####TOP
+wtar_top_fas_raw_AD <- lm(fas_raw ~ wtar_efsiq, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$wtar_efsiq >= 118.0)) 
+summary(wtar_top_fas_raw_AD)
+
+wtar_top_animal_raw_AD <- lm(animal_raw ~ wtar_efsiq , data=subset(df,diagonoses == "2" & df$etiology == "1" & df$wtar_efsiq >= 118.0))
+summary(wtar_top_animal_raw_AD)
+
+wtar_top_bnt_raw_AD <- lm(bnt_raw ~ wtar_efsiq , data=subset(df,diagonoses == "2" & df$etiology == "1" & df$wtar_efsiq >= 118.0))
+summary(wtar_top_bnt_raw_AD )
+
+####BOTTOM
+wtar_bottom_fas_raw_AD <- lm(fas_raw ~ wtar_efsiq, data=subset(df,diagonoses == "2" & df$etiology == "1" & df$wtar_efsiq <= 104.0)) 
+summary(wtar_bottom_fas_raw_AD)
+
+wtar_bottom_animal_raw_AD <- lm(animal_raw ~ wtar_efsiq , data=subset(df,diagonoses == "2" & df$etiology == "1" & df$wtar_efsiq <=104.0))
+summary(wtar_bottom_animal_raw_AD)
+
+wtar_bottom_bnt_raw_AD  <- lm(bnt_raw ~ wtar_efsiq , data=subset(df,diagonoses == "2" & df$etiology == "1" & df$wtar_efsiq >= 104.0))
+summary(wtar_bottom_bnt_raw_AD )
+
+
+
+```
+
+
+____MCI: top and bottom TOPF 
+
+
+```{r}
+###아무것도 없음 
+topf_top_fas_raw_MCI <- lm(fas_raw ~ topf_actual_ss, data=subset(df,diagonoses == "1" & df$topf_actual_ss >= 114.50)) 
+summary(topf_top_fas_raw_MCI)
+
+topf_top_animal_raw_MCI <- lm(animal_raw ~ topf_actual_ss, data=subset(df,diagonoses == "1" & df$topf_actual_ss >= 114.50)) 
+summary(topf_top_animal_raw_MCI)
+
+topf_top_bnt_raw_MCI <- lm(bnt_raw ~ topf_actual_ss, data=subset(df,diagonoses == "1" & df$topf_actual_ss >= 114.50)) 
+summary(topf_top_bnt_raw_MCI)
+
+####BOTTOM
+topf_bottom_fas_raw_MCI  <- lm(fas_raw  ~ topf_actual_ss, data=subset(df, diagonoses == "1" & topf_actual_ss <= 95.25)) 
+summary(topf_bottom_fas_raw_MCI)
+
+topf_bottom_animal_raw_MCI <- lm(animal_raw ~ topf_actual_ss, data=subset(df,diagonoses == "1" & topf_actual_ss <= 95.25)) 
+summary(topf_bottom_animal_raw_MCI)
+
+topf_bottom_bnt_raw_MCI <- lm(bnt_raw ~ topf_actual_ss, data=subset(df,diagonoses == "1" & topf_actual_ss <= 95.25)) 
+summary(topf_bottom_bnt_raw_MCI)
+
+```
+
+
+____MCI: top and bottom WTAR
+```{r}
+wtar_top_fas_raw_MCI <- lm(fas_raw ~ wtar_efsiq, data=subset(df,diagonoses == "1" & df$wtar_efsiq >= 118.0)) 
+summary(wtar_top_fas_raw_MCI)
+#####
+
+wtar_top_animal_raw_MCI <- lm(animal_raw ~ wtar_efsiq , data=subset(df,diagonoses == "1" & df$wtar_efsiq >= 118.0)) 
+summary(wtar_top_animal_raw_MCI)
+
+wtar_top_bnt_raw_MCI <- lm(bnt_raw ~ wtar_efsiq , data=subset(df,diagonoses == "1" & df$wtar_efsiq >= 118.0)) 
+summary(wtar_top_bnt_raw_MCI )
+
+####BOTTOM
+wtar_bottom_fas_raw_MCI <- lm(fas_raw ~ wtar_efsiq, data=subset(df,diagonoses == "1"  & df$wtar_efsiq <= 104.0)) 
+summary(wtar_bottom_fas_raw_MCI)
+######
+
+wtar_bottom_animal_raw_MCI <- lm(animal_raw ~ wtar_efsiq , data=subset(df,diagonoses == "1"  & df$wtar_efsiq <= 104.0)) 
+summary(wtar_bottom_animal_raw_MCI)
+
+wtar_bottom_bnt_raw_MCI  <- lm(bnt_raw ~ wtar_efsiq , data=subset(df,diagonoses == "1"  & df$wtar_efsiq <= 104.0)) 
+summary(wtar_bottom_bnt_raw_MCI )
+#####
+```
+
+___demographic
+
+```{r}
+
+kableone(CreateTableOne(total,vars = c('Age','ethnic','etiology'), strata = 'diag', test=FALSE))
+
+```
+
+___correlations
+
+```{r}
+
+yeo_7 <- total %>% select(contains('y7n'))
+paper_pencils <- total[,23:32] %>% mutate_all(funs(as.numeric(as.character(.))))
+combined_corr <- cor(bind_cols(yeo_7,paper_pencils), use = "pairwise.complete.obs")
+
+```
+
+___plot 1 all 4 diagnoses
+
+```{r}
+
+corrplot(combined_corr[0:7,8:17], method='number')
+
+
+#a <- ggplot(total, aes(x = eFSIQ, y =  y7n1_visual_ct, color = diag)) +
+#  geom_point() +
+#  geom_smooth(method = "lm") +
+#  facet_wrap(~diag) +
+#   xlim(70, 140) + 
+#   ylim(1.55,2.5)
+
+
+
+#lm <- ggplot(total, aes(x =  eFSIQ , y = y7n1_visual_ct, color = diag)) + 
+#                    geom_point() +   
+#                    geom_smooth(method = "lm") + 
+#                    facet_wrap(~diag)
+
+
+
+#lm <- ggplot(total, aes(x =  eFSIQ , y = y7n1_visual_ct, color = diag)) + geom_point() + geom_smooth(method = "lm")
+#+ facet_wrap(~total$diag)
+
+#data <- ddply(total, .(sub_id, Accuracy), transform, RTOutlier = ifelse((RT > (mean(RT) + #3*sd(RT))) | (RT < (mean(RT) - 3*sd(RT))), 1, 0))
+```
+
+
+___Plot 2 : syndrome_v2_v2 1: MCI
+
+
+```{r}
+MCI <- subset(total, syndrome_v2_v2 == '1')
+
+yeo_7_MCI <- MCI %>% select(contains('y7n')) 
+paper_pencils_MCI <- MCI[,23:32] %>% mutate_all(funs(as.numeric(as.character(.))))
+combined_corr_MCI <- cor(bind_cols(yeo_7_MCI, paper_pencils_MCI), use = "pairwise.complete.obs")
+
+
+
+hello <- rcorr(as.matrix(combined_corr_MCI),type="pearson")        
+         
+corrplot(combined_corr_MCI[0:7,8:17], method='number')
+
+
+
+
+
+```
+
+
+___Plot 3 : syndrome_v2_v2 2: dementia
+
+```{r pressure, echo=FALSE}
+dementia <- subset(total, syndrome_v2_v2 == '2')
+
+yeo_7_dementia <- dementia %>% select(contains('y7n')) 
+paper_pencils_dementia <- dementia[,23:32] %>% mutate_all(funs(as.numeric(as.character(.))))
+combined_corr_dementia <- cor(bind_cols(yeo_7_dementia,paper_pencils_dementia), 
+                                       use = "pairwise.complete.obs")
+
+corrplot(combined_corr_dementia[0:7,8:17],method='number')
+```
+
+___Plot 4 : syndrome_v2_v2 3: normal cognition
+
+```{r}
+
+HC <- subset(total, syndrome_v2_v2 == '3')
+
+yeo_7_HC <- HC %>% select(contains('y7n')) 
+paper_pencils_HC <- HC[,23:32] %>% mutate_all(funs(as.numeric(as.character(.))))
+combined_corr_HC <- cor(bind_cols(yeo_7_HC,paper_pencils_HC), 
+                                       use = "pairwise.complete.obs")
+
+corrplot(combined_corr_HC[0:7,8:17],method='number')
+
+```
+
